@@ -1,4 +1,4 @@
-name: Release
+name: Lime Release
 on:
   pull_request:
     branches:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
+  build:
     permissions:
       contents: write
     strategy:
@@ -29,7 +29,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with: 
-          ref: ${{ inputs.Ref }}
+          ref: ${{ inputs.Ref || 'main' }}
           repository: 'LimeDevHub/lime'
           token: ${{ secrets.RELEASE_TOKEN }}
           path: 'lime'
@@ -71,7 +71,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          releaseId: ${{ inputs.Ref }}
+          releaseId: ${{ inputs.Ref || 'main' }}
           projectPath: ./lime
           releaseName: "Lime v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: "See the assets to download and install this version."
