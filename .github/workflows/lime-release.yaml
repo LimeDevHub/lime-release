@@ -1,8 +1,5 @@
 name: Release
 on:
-  push:
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
@@ -26,6 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with: 
+          ref: 'main'
           repository: 'LimeDevHub/lime'
           token: ${{ secrets.RELEASE_TOKEN }}
           path: 'lime'
@@ -67,8 +65,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./lime
-          tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
           releaseName: "Lime v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: "See the assets to download and install this version."
-          releaseDraft: false
+          releaseDraft: true
           prerelease: true
