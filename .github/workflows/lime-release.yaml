@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with: 
           repository: 'LimeDevHub/lime'
-          token: $${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
           path: 'lime'
 
       - name: Install dependencies (ubuntu only)
