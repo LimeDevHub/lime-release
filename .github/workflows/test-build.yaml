@@ -1,0 +1,190 @@
+name: Lime Release
+on:
+  workflow_dispatch:
+    inputs:
+      Ref:
+        description: 'The branch, tag or SHA to checkout.'
+        required: true
+        default: 'main'
+        type: string
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  LuxVersion: "0.0.2"
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: ubuntu-latest
+            arch: x86_64
+            rust_target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            arch: x86_64
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            arch: aarch64
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            arch: x86_64
+            rust_target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout lime repository
+        uses: actions/checkout@v4
+        with: 
+          ref: ${{ inputs.Ref || 'main' }}
+          repository: 'LimeDevHub/lime'
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: 'lime'
+
+      - name: mv ffmpeg to binaries dir (ubuntu or macos)
+        if: matrix.config.os != 'windows-latest'
+        run: |
+          mv ffmpeg/ffmpeg-* lime/src-tauri/binaries/
+
+      - name: Move ffmpeg binary (windows)
+        if: matrix.config.os == 'windows-latest'
+        run: |
+          Move-Item ./ffmpeg/ffmpeg-x86_64-pc-windows-msvc.exe ./lime/src-tauri/binaries/
+        shell: powershell
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.config.os == 'ubuntu-latest'
+        # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: download lux (ubuntu)
+        if: matrix.config.os == 'ubuntu-latest'
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'LimeDevHub/lux'
+          version: "tags/v${{ env.LuxVersion }}"
+          file: 'lux_${{ env.LuxVersion }}_Linux_x86_64.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: tar lux (ubuntu)
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          tar -zxvf lux_${{ env.LuxVersion }}_Linux_x86_64.tar.gz
+          mv ./lux lime/src-tauri/binaries/lux-x86_64-unknown-linux-gnu
+
+      - name: download lux (apple)
+        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'aarch64'
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'LimeDevHub/lux'
+          version: "tags/v${{ env.LuxVersion }}"
+          file: 'lux_${{ env.LuxVersion }}_Darwin_arm64.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: tar lux (apple)
+        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'aarch64'
+        run: |
+          tar -zxvf lux_${{ env.LuxVersion }}_Darwin_arm64.tar.gz
+          mv ./lux lime/src-tauri/binaries/lux-aarch64-apple-darwin
+          
+      - name: download lux (macos intel)
+        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'x86_64'
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'LimeDevHub/lux'
+          version: "tags/v${{ env.LuxVersion }}"
+          file: 'lux_${{ env.LuxVersion }}_Darwin_x86_64.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: tar lux (macos-12)
+        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'x86_64'
+        run: |
+          tar -zxvf lux_${{ env.LuxVersion }}_Darwin_x86_64.tar.gz
+          mv ./lux lime/src-tauri/binaries/lux-x86_64-apple-darwin
+
+      - name: download lux (windows)
+        if: matrix.config.os == 'windows-latest'
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'LimeDevHub/lux'
+          version: "tags/v${{ env.LuxVersion }}"
+          file: 'lux_${{ env.LuxVersion }}_Windows_x86_64.zip'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract ZIP file (windows)
+        if: matrix.config.os == 'windows-latest'
+        run: | 
+          Expand-Archive -LiteralPath ./lux_${{ env.LuxVersion }}_Windows_x86_64.zip -DestinationPath .
+          Move-Item -Path ./lux.exe -Destination ./lime/src-tauri/binaries/lux-x86_64-pc-windows-msvc.exe
+        shell: powershell
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: ${{ matrix.config.rust_target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.config.rust_target }}
+          workspaces: "./lime/src-tauri -> target"
+
+      - name: install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8.x.x
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm" # Set this to npm, yarn or pnpm.
+          cache-dependency-path: './lime/pnpm-lock.yaml'
+
+      - name: Install frontend dependencies
+        working-directory: ./lime
+        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
+        run: pnpm install # Change this to npm, yarn or pnpm.
+
+      - name: Build the app (apple)
+        uses: tauri-apps/tauri-action@v0
+        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'aarch64'
+        id: tauri-action-mac
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: test-release
+          projectPath: ./lime
+          args: --target ${{ matrix.config.target }}
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        if: matrix.config.os != 'macos-latest' || matrix.config.arch == 'aarch64'
+        id: tauri-action
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: test-release
+          projectPath: ./lime
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tauri-client-app-artifact
+          path: |
+            ${{ fromJSON(steps.tauri-action-mac.outputs.artifactPaths)[0] }}
+            ${{ fromJSON(steps.tauri-action.outputs.artifactPaths)[0] }}
+
