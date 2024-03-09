@@ -161,30 +161,28 @@ jobs:
 
       - name: Build the app (apple)
         uses: tauri-apps/tauri-action@v0
-        if: matrix.config.os == 'macos-latest' && matrix.config.arch == 'aarch64'
-        id: tauri-action-mac
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          releaseId: test-release
-          projectPath: ./lime
-          args: --target ${{ matrix.config.target }}
-
-      - name: Build the app
-        uses: tauri-apps/tauri-action@v0
-        if: matrix.config.os != 'macos-latest' || matrix.config.arch == 'aarch64'
         id: tauri-action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           releaseId: test-release
           projectPath: ./lime
+          args: --target ${{ matrix.config.rust_target }}
+
+      # - name: Build the app
+      #   uses: tauri-apps/tauri-action@v0
+      #   if: matrix.config.os != 'macos-latest' || matrix.config.arch != 'aarch64'
+      #   id: tauri-action
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     releaseId: test-release
+      #     projectPath: ./lime
       
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: tauri-client-app-artifact
           path: |
-            ${{ fromJSON(steps.tauri-action-mac.outputs.artifactPaths)[0] }}
             ${{ fromJSON(steps.tauri-action.outputs.artifactPaths)[0] }}
 
