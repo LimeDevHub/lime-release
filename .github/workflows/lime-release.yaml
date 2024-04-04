@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LuxVersion: "0.0.2"
+  LuxVersion: "0.0.3"
 
 jobs:
   build:
